@@ -33,7 +33,7 @@ working_length = len(working_directory)
 os.chdir(working_directory)
 
 
-def create_subfolders(working_length, folder_path, subfolders):
+def create_subfolders(working_length, folder_path, subfolders, flag):
     '''This function looks into a subfolder and determines whether there are
     more subfolders (dictionaries). If there are, this function is recursive
     and calls this function again. If there are not, it creates the folder.'''
@@ -55,22 +55,22 @@ def create_subfolders(working_length, folder_path, subfolders):
             print("Making subfolder: {}".format(breadcrumb[working_length:]))
             os.mkdir(breadcrumb)
             
-        elif isinstance(subfolder, dict):
+            # If Flagged, call function recursively to create subsubfolders
+            # (values) from each subfolder (key) and set Flag to False to
+            # indicate that the values as a whole is not a dictionary and thus
+            # does not need to be iterated through
+            if flag:
+                create_subfolders(working_length, breadcrumb, subfolders[subfolder], False)
             
-            # If the subfolder is a dictionary, iterate through each
-            # subfolder (keys of dictionary)
-            for subfolder2 in subfolder:
-                
-                # Update breadcrumb with subfolder name
-                breadcrumb = os.path.join(folder_path, subfolder2)
-                
-                # Create subfolder
-                print("Making subfolder: {}".format(breadcrumb[working_length:]))
-                os.mkdir(breadcrumb)
-                
-                # Call function recursively to create new subsubfolders from
-                # this subfolder
-                create_subfolders(working_length, breadcrumb, subfolder[subfolder2])
+        elif isinstance(subfolder, dict):
+            # If the subfolder is a dictionary, update breadcrumb to folder
+            # path
+            breadcrumb = folder_path
+            
+            # Call function recursively to create subfolder from the keys
+            # and set Flag to True to indicate that this value (subfolder) is
+            # a dictionary with subsubfolders that need to be iterated through
+            create_subfolders(working_length, breadcrumb, subfolder, True)
             
         else:
             # If there are no subfolders or if not a string or dictionary,
@@ -155,8 +155,10 @@ for folder in folders:
     # Check if there are subfolders
     if len(subfolders) != 0:
         
-        # If subfolders exist, call function to create subfolders
-        create_subfolders(working_length, folder_path, subfolders)
+        # If subfolders exist, call function to create subfolders, setting
+        # Flag to false to indicate that the subfolders list itself is not
+        # a dictionary and thus does not need to be iterated through
+        create_subfolders(working_length, folder_path, subfolders, False)
     
     # Otherwise, pass
     else:
