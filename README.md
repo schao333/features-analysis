@@ -42,7 +42,7 @@ To use ArcPy, a valid [Esri ArcGIS](https://www.esri.com/en-us/arcgis/products/a
 
 The scripts are separated into four consecutive folders, starting with 0. Navigate through the folders in that order. Within each folder are scripts, whose filename begins with a number starting with 1. Run through the files within each folder in that order.
 
-Each script has a commented-out header that describes in greater detail what the script does, provides version information, and states what input files and preprocessing are needed to run the script successfully. It is assumed that all datafiles will be somewhat clean and error-free prior to processing. Through each script, an asterisk (*) in the comments denotes that a comment's corresponding code should be changed as necessary to accommodate user inputs. Likewise, triple quotations that surround placeholder text ("""text""") indicates that the text should be changed as necessary to accommodate user inputs.
+Each script has a commented-out header that describes in greater detail what the script does, provides version information, and states what input files and preprocessing are needed to run the script successfully. It is assumed that all datafiles will be somewhat clean and error-free prior to processing. Through each script, an asterisk (```*```) in the comments denotes that a comment's corresponding code should be changed as necessary to accommodate user inputs. Likewise, triple quotations that surround placeholder text (```"""text"""```) indicates that the text should be changed as necessary to accommodate user inputs.
 
 ### 0_create-folders
 
