@@ -43,7 +43,7 @@ def merge(csv_list, country, key, contextual_features, shape, population):
     '''This function imports, modifies, and combines CSV files.'''
     
     # Set population density column name
-    pop_density = "pop_density_m"
+    pop_density = "pop_density_km"
     
     print("\n\n=============================================\n\n")
     print("IMPORT CSVs")
@@ -76,9 +76,10 @@ def merge(csv_list, country, key, contextual_features, shape, population):
     # print(shp_pop_df.head())
     
     # Create population density column
+    # Multiply m^2 by 1000000 to get km^2
     # Change column names as necessary *
     print("Creating population density column...")
-    shp_pop_df[pop_density] = shp_pop_df["Population"] / shp_pop_df["area_m"]
+    shp_pop_df[pop_density] = shp_pop_df["Population"] / shp_pop_df["area_m"] * 1000000
     
     # Merge dataframe with contextual features dataframe
     print("Merging population density and contextual features...")
@@ -90,7 +91,7 @@ def merge(csv_list, country, key, contextual_features, shape, population):
     cf_shp_pop_df = cf_shp_pop_df.drop(columns = ["area_m", "Population"])
     
     # Export to csv
-    csv_file_name = country + "_pop_sf_RAW.csv"
+    csv_file_name = "{}_pop_sf_raw.csv".format(country)
     cf_shp_pop_df.to_csv(csv_file_name)
     
     # Append csv name to list
@@ -136,7 +137,7 @@ def concat(csv_list, y_variable_index, index_name, ctry):
     # variable will get moved to the middle this part copies the column into
     # a new column at the end and deletes the old column
     # Enter list of dependent variables backwards in line with y_variable_index
-    ls_of_var = ["pop_density_m"] # taken from merge()
+    ls_of_var = ["pop_density_km"] # taken from merge()
     new_name = ["pop_density"]
     
     # Select appropriate names
@@ -146,14 +147,15 @@ def concat(csv_list, y_variable_index, index_name, ctry):
     # Copy column
     concat_country_dfs[select_new_name] = concat_country_dfs[select_ls_of_var]
     
-    # Delete old column
+    # Delete old column and rename new column to old column
     concat_country_dfs = concat_country_dfs.drop(columns = select_ls_of_var)
-    
+    concat_country_dfs.rename(columns={select_new_name: select_ls_of_var}, inplace = True)
+
     # Print dataframe
     # print(concat_country_dfs.head(5))
     
     # Save to csv (too large for Excel)
-    concat_country_dfs.to_csv(ctry + "_spfeas.csv")
+    concat_country_dfs.to_csv("{}_spfeas-pop.csv".format(ctry))
     
     # Return variable for next function
     return concat_country_dfs
@@ -187,8 +189,7 @@ def correlation(ctry, all_x, y_var, joined_df, y_dict):
     '''This function computes the correlations and only takes the top 200
     independent variables.'''
     
-    print("\n\n=============================================\n\n")
-    print("COMPUTE CORRELATIONS")
+    print("\n\nCOMPUTE CORRELATIONS")
     
     # The Pearson correlation coefficient measures the linear relationship
     # between two datasets. Strictly speaking, Pearson's correlation requires
@@ -227,7 +228,7 @@ def correlation(ctry, all_x, y_var, joined_df, y_dict):
     # List x is made into a dataframe, which is sorted by the absolute
     # values of the Pearson values
     x_df = pd.DataFrame(x, columns = ["x_var","abs_r","r"]).sort_values("abs_r", ascending = False)
-    x_df.to_csv(ctry + "_" + y_var + "_PEARSON.csv")
+    x_df.to_csv("{}_{}_pearson.csv".format(ctry, y_var))
     
     # List x sorted by positive r
     x_df_pos = pd.DataFrame(x, columns = ["x_var","abs_r","r"]).sort_values("r", ascending = False)
@@ -247,47 +248,46 @@ def correlation(ctry, all_x, y_var, joined_df, y_dict):
     y_dict[y_var_ydict_key] = list(x_df["x_var"][0:200])
     
     # Print top 200 variables based on Pearson's r
-    print("The top 200 variables based on Pearson's r are:")
-    print(y_dict[y_var_ydict_key])
+    # print("The top 200 variables based on Pearson's r are:")
+    # print(y_dict[y_var_ydict_key])
     
-    # Print shape for each key (y_var)
-    for key in y_dict.keys():
-        print("For {}, there are {} variables".format(key,len(y_dict[key])))
+    # Print shape for last key (y_var)
+    last_key = list(y_dict)[-1]
+    print("For {}, there are {} variables.".format(last_key, len(y_dict[last_key])))
     
-    
-    print("\n\n=============================================\n\n")
     
     # Correlation Significance
-    print("CORRELATION SIGNIFICANCE")
+    print("\n\nCORRELATION SIGNIFICANCE")
     
     # Get independent variables from the variable dictionary and store in
     # list x_vars
     x_vars = y_dict[y_var_ydict_key]
     
-    # Build dataframe with the y variable as the first column and the top
-    # 200 variables as the subsequent columns
-    vars_df = pd.DataFrame()
-    vars_df[y_var] = joined_df[y_var]
-    
-    # Add 200 variables to the dataframe
-    for x_var in x_vars:
-        vars_df[x_var] = joined_df[x_var]
-    
-    
+    # Add 200 standardized variables to new dataframe
+    vars_df = joined_df[x_vars]
+        
     # Scale / normalize data
-    print("Normalizing data...")
+    print("Standardizing data...")
     standard_scaler = preprocessing.StandardScaler()
     names = vars_df.columns
     scaled_df = standard_scaler.fit_transform(vars_df)
-    scaled_df = pd.DataFrame(scaled_df, columns = names)
-    # print(scaled_df.head())
+    scaled_df = pd.DataFrame(scaled_df, index = vars_df.index, columns = names)
+    # print(scaled_df.head())    
     print("The dimension of the scaled table is {}.".format(scaled_df.shape))
     
+    # Concatenate unstandardized dependent variable with standardized
+    # independent variables
+    full_df = pd.concat([joined_df[y_var], scaled_df], axis=1)
+
+    # Remove the index (FIPS code)
+    # full_df.reset_index(drop = True, inplace = True)
+    
     # Convert dataframe to csv
-    scaled_df.to_csv(ctry + "_" + y_var + "_scaled_csv.csv")
+    full_df.to_csv("{}_{}_scaled.csv".format(ctry, y_var))
+    # print(full_df.head())
     
     # Return variables for next function 
-    return joined_df, x_vars, y_var, y_dict, scaled_df
+    return joined_df, x_vars, y_var, y_dict, full_df
 
 
 def main(countries, base_folder, index_name):
@@ -348,5 +348,6 @@ def main(countries, base_folder, index_name):
 # Countries are the countries abbreviations for analysis, base folder is where
 # the CSVs are saved, and inex name is the primary key column name *
 main(countries = ["""sl""", """blz""", """gh"""], base_folder = r"""folder/""", index_name = """FIPS""")
+
 
 print("Done.")

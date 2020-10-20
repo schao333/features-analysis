@@ -76,13 +76,13 @@ def import_csv(y_variable_index, contextual_features, osm, index_number, index_n
     
     # Get the list of dependent variables from the dataframe to store in
     # list y_vars
-    print("Obtaining dependent variable:")
+    print("Obtaining dependent variable...")
     y_var = list(spfeas_osm.axes[1])[y_variable_index] # axes1 = column
     # print(y_var)
     
     
     # Get a list of all independent variables from the dataframe in list all_x
-    print("Obtaining independent variables:")
+    print("Obtaining independent variables...")
     all_x = list(spfeas_osm.axes[1])[0:index_number]
     # print(all_x)
     
@@ -94,8 +94,7 @@ def correlation(image_type, all_x, y_var, spfeas_osm, y_dict):
     '''This function computes the correlations and only takes the top 200
     independent variables.'''
     
-    print("\n\n=============================================\n\n")
-    print("COMPUTE CORRELATIONS")
+    print("\n\nCOMPUTE CORRELATIONS")
     
     # The Pearson correlation coefficient measures the linear relationship
     # between two datasets. Strictly speaking, Pearson's correlation requires
@@ -134,7 +133,7 @@ def correlation(image_type, all_x, y_var, spfeas_osm, y_dict):
     # List x is made into a dataframe, which is sorted by the absolute values
     # of the Pearson values
     x_df = pd.DataFrame(x, columns = ["x_var","abs_r","r"]).sort_values("abs_r", ascending = False)
-    x_df.to_csv(image_type + "_" + y_var + "_PEARSON.csv")
+    x_df.to_csv("{}_{}_pearson.csv".format(image_type, y_var))
     
     # List x sorted by positive r
     x_df_pos = pd.DataFrame(x, columns = ["x_var","abs_r","r"]).sort_values("r", ascending = False)
@@ -154,45 +153,45 @@ def correlation(image_type, all_x, y_var, spfeas_osm, y_dict):
     y_dict[y_var] = list(x_df["x_var"][0:200])
     
     # Print top 200 variables based on Pearson's r
-    print("The top 200 variables based on Pearson's r are:")
-    print(y_dict[y_var])
+    # print("The top 200 variables based on Pearson's r are:")
+    # print(y_dict[y_var])
     
-    # Print shape for each key (y_var)
-    for key in y_dict.keys():
-        print("For {}, there are {} variables".format(key,len(y_dict[key])))
-    
-    print("\n\n=============================================\n\n")
+    # Print shape for last key (y_var)
+    last_key = list(y_dict)[-1]
+    print("For {}, there are {} variables.".format(last_key, len(y_dict[last_key])))
     
     # Correlation Significance
-    print("CORRELATION SIGNIFICANCE")
+    print("\n\nCORRELATION SIGNIFICANCE")
     
     # Get independent variables from the variable dictionary and store in
     # list x_vars
     x_vars = y_dict[y_var]
     
-    # Build dataframe with the y variable as the first column and the top
-    # 200 variables as the subsequent columns
-    vars_df = pd.DataFrame()
-    vars_df[y_var] = spfeas_osm[y_var]
-    
-    # Add 200 variables to the dataframe
-    for x_var in x_vars:
-        vars_df[x_var] = spfeas_osm[x_var]
-    
+    # Add 200 standardized variables to new dataframe
+    vars_df = spfeas_osm[x_vars]
+        
     # Scale / normalize data
-    print("Normalizing data...")
+    print("Standardizing data...")
     standard_scaler = preprocessing.StandardScaler()
     names = vars_df.columns
     scaled_df = standard_scaler.fit_transform(vars_df)
-    scaled_df = pd.DataFrame(scaled_df, columns = names)
-    # print(scaled_df.head())
+    scaled_df = pd.DataFrame(scaled_df, index = vars_df.index, columns = names)
+    # print(scaled_df.head())    
     print("The dimension of the scaled table is {}.".format(scaled_df.shape))
     
+    # Concatenate unstandardized dependent variable with standardized
+    # independent variables
+    full_df = pd.concat([spfeas_osm[y_var], scaled_df], axis=1)
+
+    # Remove the index (FIPS code)
+    # full_df.reset_index(drop = True, inplace = True)
+    
     # Convert dataframe to csv
-    scaled_df.to_csv(image_type + "_" + y_var + "_scaled_csv.csv") ########
+    full_df.to_csv("{}_{}_scaled.csv".format(image_type, y_var))
+    # print(full_df.head())
     
     # Return variables for next function 
-    return spfeas_osm, x_vars, y_var, scaled_df
+    return spfeas_osm, x_vars, y_var, full_df
 
 
 def main(image_type, contextual_features, osm, index_number, index_name):
@@ -225,5 +224,6 @@ main(image_type = """sl""", contextual_features = """sl_spfeas.csv""", osm = """
 main(image_type = """blz""", contextual_features = """blz_spfeas.csv""", osm = """blz_OSM.csv""", index_number = 432, index_name = """FIPS""")
 main(image_type = """gh""", contextual_features = """gh_spfeas.csv""", osm = """gh_OSM.csv""", index_number = 432, index_name = """FIPS""")
 main(image_type = """sl-blz-gh""", contextual_features = """sl-blz-gh_spfeas.csv""", osm = """sl-blz-gh_OSM.csv""", index_number = 432, index_name = """FIPS""")
+
 
 print("Done.")
