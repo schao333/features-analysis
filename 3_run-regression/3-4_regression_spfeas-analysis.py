@@ -34,8 +34,10 @@ from sklearn.metrics import mean_absolute_error as mae
 from sklearn.linear_model import ElasticNetCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
+import matplotlib.pyplot as plt
 import joblib
 import time
+
 
 # Start timer
 start_time = time.time()
@@ -49,7 +51,7 @@ def import_correlation(y, image_type):
     
     # Create file name
     # Change as necessary to import files *
-    scaled_csv = image_type + "_" + y + "_scaled_csv.csv"
+    scaled_csv = "{}_{}_scaled.csv".format(image_type, y)
     print("Importing {}...".format(scaled_csv))
     
     # Convert csv to dataframe
@@ -64,7 +66,7 @@ def import_correlation(y, image_type):
     return x_vars, y_var, scaled_df
 
 
-def rfr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics, Models, Coefficients, y, image_type, dep_var):
+def rfr(seed_range, image_type, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics, Models, Coefficients, Predicted_vs_Actual):
     '''This function runs the random forest regression.'''
 
     print("\n\n=============================================\n\n")
@@ -74,6 +76,7 @@ def rfr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
     # Values are results of analysis
     Y_Statistics[y_var] = {}
     Y_Summary_Statistics[y_var] = {}
+    Predicted_vs_Actual[y_var] = {}
     
     # Set dependent variable as a key in Models dictionary,
     # used to store each result object
@@ -123,11 +126,11 @@ def rfr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
         # RandomForestRegressor
         # GridSearchCV runs RandomForestRegressor, so no need to take
         # parameters and run RFR again
-        gsc = GridSearchCV(estimator = rf_estimator, #RandomForestRegressor(),
+        gsc = GridSearchCV(estimator = rf_estimator, # RandomForestRegressor()
                    param_grid = {'n_estimators': [200, 300, 500, 700, 900, 1000],
                                  'min_samples_leaf': [1, 2, 5, 10, 25],
                                  'max_features': ["auto", "sqrt", "log2", 0.33, 0.20, 0.10, None]},
-                   cv = 5,
+                   cv = 5, # 5-fold cross validation
                    scoring = 'neg_mean_squared_error',
                    verbose = False,
                    n_jobs = -1)
@@ -142,9 +145,8 @@ def rfr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
         
         # Save model
         joblib.dump(value = rf_result,
-                    filename = image_type + "_" + y + "_" + str(i) + "_rfr_" + dep_var + "_model.pkl",
+                    filename = "{}_rfr_{}_{}_model.pkl".format(image_type, y_var, str(i)),
                     compress = 3)
-        
         
         best_parameters = grid_result.best_params_
         print("Here are the optimized parameters: ", best_parameters)
@@ -171,7 +173,6 @@ def rfr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
         # Append r^2 to list
         in_sample_R2_list.append(r_squared)
         
-        
         # Create dataframe of contextual features and their coefficients as
         # determined by RFR
         # Sort by absolute value of coefficients
@@ -184,116 +185,39 @@ def rfr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
         print(y_df.head(10))
         print("The dimension of this table is {}.".format(y_df.shape))
 
-        
-        # Delete model features whose coefficients are 0 to reduce
-        # dataframe clutter (optional)
-        '''
-        for index, row in y_df.iterrows():
-            
-            if row['Coefficient'] == 0:
-                print("Dropping {} from dataframe...".format(row['Feature']))
-                y_df.drop(index, inplace = True)
-                
-            else:
-                print("Keeping {} in dataframe...".format(row['Feature']))
-        print("The dimension of this table is now {}.".format(y_df.shape))
-        '''
-
         # Store coefficients in Coefficients dictionary, with seed number as key
         Coefficients[y_var][i] = y_df
         
         print("Testing the model...")
-        # Predict y based on X test values
-        y_pred = rf_result.predict(X_test)
         
-        # Calculate out-of-sample r^2
-        # This only uses the test sizes
-        out_of_sample_r_squared = rf_result.score(X_test, y_test)
-        
-        # Calculate ouf-of-sample MSE 
-        out_of_sample_mse_y = mse(y_test, y_pred)
-
-        # Calculate ouf-of-sample MAE    
-        out_of_sample_mae_y = mae(y_test, y_pred)
-        
-        # Calculate ouf-of-sample MAPE
-        out_of_sample_mape_y = np.mean(abs((y_test - y_pred) / y_test)) * 100
-       
-        # Print statement of statistics
-        print("Out of Sample R2: {:.2f}; Out of Sample MSE: {:.3f}; Out of Sample MAE: {:.3f}; MAPE {:.3f}"
-              .format(out_of_sample_r_squared, out_of_sample_mse_y, out_of_sample_mae_y, out_of_sample_mape_y))
-        
-        # Add out-of-sample r^2, MSE, MAE, and MAPE to dictionary
-        Y_Statistics[y_var][i]['Out_of_Sample R2'] = out_of_sample_r_squared
-        Y_Statistics[y_var][i]['Out_of_Sample MSE'] = out_of_sample_mse_y
-        Y_Statistics[y_var][i]['Out_of_Sample MAE'] = out_of_sample_mae_y
-        Y_Statistics[y_var][i]['Out_of_Sample MAPE'] = out_of_sample_mape_y
-        
-        # Append out-of-sample r^2, MSE, MAE, and MAPE to lists
-        out_of_sample_R2_list.append(out_of_sample_r_squared)
-        out_of_sample_mse_y_list.append(out_of_sample_mse_y)
-        out_of_sample_mae_y_list.append(out_of_sample_mae_y)
-        out_of_sample_mape_y_list.append(out_of_sample_mape_y)
-        
-        # Print statistics for that seed iteration
-        print("Here's the results summary for {}, with random seed {}:".format(y_var, i))
-        print(Y_Statistics[y_var][i])
-        
+        # Use model to make predictions
+        make_prediction(sets = [X_train, X_test, y_train, y_test],
+                        i = i,
+                        y_var = y_var,
+                        dictionaries = [Y_Statistics, Predicted_vs_Actual],
+                        lists = [out_of_sample_R2_list, out_of_sample_mse_y_list, out_of_sample_mae_y_list, out_of_sample_mape_y_list],
+                        image_type = image_type,
+                        method = "rfr",
+                        model_result = rf_result)
+                
         print("\n\n---------------------------------------------\n\n")
     
     
     print("Calculating averages...")
     
-    # Print out-of-sample r^2 list
-    print("Out of sample R2 values:")
-    print(out_of_sample_R2_list)
+    # Create list of statistics to be calculated
+    statistics_parameters = [(True, "R2", out_of_sample_R2_list),
+                             (True, "MSE", out_of_sample_mse_y_list),
+                             (True, "MAE", out_of_sample_mae_y_list),
+                             (True, "MAPE", out_of_sample_mape_y_list),
+                             (False, "R2", in_sample_R2_list)]
     
-    # Calculate minimum, maximum, and average out-of-sample r^2 values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_Out_R2"] = min(out_of_sample_R2_list)
-    Y_Summary_Statistics[y_var]["Mean_Out_R2"] = mean(out_of_sample_R2_list)
-    Y_Summary_Statistics[y_var]["Max_Out_R2"] = max(out_of_sample_R2_list)
-
-    # Print MSE list
-    print("Out of sample MSE values:")
-    print(out_of_sample_mse_y_list)
-    
-    # Calculate minimum, maximum, and average out-of-sample MSE values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_Out_MSE"] = min(out_of_sample_mse_y_list)
-    Y_Summary_Statistics[y_var]["Mean_Out_MSE"] = mean(out_of_sample_mse_y_list)
-    Y_Summary_Statistics[y_var]["Max_Out_MSE"] = max(out_of_sample_mse_y_list)
-    
-    # Print MAE list
-    print("Out of sample MAE values:")
-    print(out_of_sample_mae_y_list)
-    
-    # Calculate minimum, maximum, and average out-of-sample MAE values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_Out_MAE"] = min(out_of_sample_mae_y_list)
-    Y_Summary_Statistics[y_var]["Mean_Out_MAE"] = mean(out_of_sample_mae_y_list)
-    Y_Summary_Statistics[y_var]["Max_Out_MAE"] = max(out_of_sample_mae_y_list)
-    
-    # Print MAPE list
-    print("Out of sample MAPE values:")
-    print(out_of_sample_mape_y_list)
-    
-    # Calculate minimum, maximum, and average out-of-sample MAPE values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_Out_MAPE"] = min(out_of_sample_mape_y_list)
-    Y_Summary_Statistics[y_var]["Mean_Out_MAPE"] = mean(out_of_sample_mape_y_list)
-    Y_Summary_Statistics[y_var]["Max_Out_MAPE"] = max(out_of_sample_mape_y_list)
-    
-    # Print in-sample r^2 list
-    print("In sample R2 values:")
-    print(in_sample_R2_list)
-    
-    # Calculate minimum, maximum, and average in-sample r^2 values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_In_R2"] = min(in_sample_R2_list)
-    Y_Summary_Statistics[y_var]["Mean_In_R2"] = mean(in_sample_R2_list)
-    Y_Summary_Statistics[y_var]["Max_In_R2"] = max(in_sample_R2_list)
-    
+    # Iterate through the list and calculate statistics for each
+    for sp in statistics_parameters:
+        calculate_statistics(out_sample = sp[0],
+                             statistic_type = sp[1],
+                             statistic_list = sp[2],
+                             statistic_dictionary = Y_Summary_Statistics[y_var])
     
     # Print statistics for all seeds
     print("Here's the results for {}:".format(y_var))
@@ -307,7 +231,7 @@ def rfr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
     print("\n\n#######################\n\n")
 
 
-def enr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics, Models, Coefficients, y, image_type, dep_var):
+def enr(seed_range, image_type, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics, Models, Coefficients, Predicted_vs_Actual):
     '''This function runs the elastic net regularized regression.'''
     
     print("\n\n=============================================\n\n")
@@ -317,6 +241,7 @@ def enr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
     # Values are results of analysis
     Y_Statistics[y_var] = {}
     Y_Summary_Statistics[y_var] = {}
+    Predicted_vs_Actual[y_var] = {}
     
     # Set dependent variable as a key in Models dictionary,
     # used to store each result object
@@ -350,7 +275,7 @@ def enr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
                                    l1_ratio = [.1, .5, .7, .9, .95, .99, 1],
                                    verbose = False,
                                    n_jobs = -1, 
-                                   cv = 5, # 5-fold cross validatoin
+                                   cv = 5, # 5-fold cross validation
                                    selection = 'random',
                                    fit_intercept = False)
         
@@ -372,7 +297,7 @@ def enr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
         
         # Save model
         joblib.dump(value = enet_result,
-                    filename = image_type + "_" + y + "_" + str(i) + "_enr_" + dep_var + "_model.pkl",
+                    filename = "{}_enr_{}_{}_model.pkl".format(image_type, y_var, str(i)),
                     compress = 3)
         
         # Append the model to the Models dictionary, with seed number as
@@ -414,132 +339,40 @@ def enr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
         print(y_df.head(10))
         print("The dimension of this table is {}.".format(y_df.shape))
 
-        
-        # Delete model features whose coefficients are 0 to reduce dataframe
-        # clutter (optional)
-        '''
-        for index, row in y_df.iterrows():
-            
-            if row['Coefficient'] == 0:
-                print("Dropping {} from dataframe...".format(row['Feature']))
-                y_df.drop(index, inplace = True)
-                
-            else:
-                print("Keeping {} in dataframe...".format(row['Feature']))
-        print("The dimension of this table is now {}.".format(y_df.shape))
-        '''
-
         # Store coefficients in Coefficients dictionary, with seed number as key
         Coefficients[y_var][i] = y_df
         
         print("Testing the model...")
-        # Predict y based on X test values
-        y_pred = enet_result.predict(X_test)
         
-        # Calculate out-of-sample r^2 based
-        out_of_sample_r_squared = enet_result.score(X_test,y_test)
-        
-        # Calculate out-of-sample MSE 
-        out_of_sample_mse_y = mse(y_test, y_pred)
-        
-        # Calculate ouf-of-sample MAE    
-        out_of_sample_mae_y = mae(y_test, y_pred)
-        
-        # Calculate ouf-of-sample MAPE
-        out_of_sample_mape_y = np.mean(abs((y_test - y_pred) / y_test)) * 100
-        
-        # Print statement of statistics
-        print("Out of Sample R2: {:.2f}; Out of Sample MSE: {:.3f}; Out of Sample MAE: {:.3f}; MAPE {:.3f}"
-              .format(out_of_sample_r_squared, out_of_sample_mse_y, out_of_sample_mae_y, out_of_sample_mape_y))
-        
-        # Add out-of-sample r^2, MSE, MAE, and MAPE to dictionary
-        Y_Statistics[y_var][i]['Out_of_Sample R2'] = out_of_sample_r_squared
-        Y_Statistics[y_var][i]['Out_of_Sample MSE'] = out_of_sample_mse_y
-        Y_Statistics[y_var][i]['Out_of_Sample MAE'] = out_of_sample_mae_y
-        Y_Statistics[y_var][i]['Out_of_Sample MAPE'] = out_of_sample_mape_y
-        
-        # Append out-of-sample r^2, MSE, MAE, and MAPE to lists
-        out_of_sample_R2_list.append(out_of_sample_r_squared)
-        out_of_sample_mse_y_list.append(out_of_sample_mse_y)
-        out_of_sample_mae_y_list.append(out_of_sample_mae_y)
-        out_of_sample_mape_y_list.append(out_of_sample_mape_y)
-        
-        # Print statistics for that seed iteration
-        print("Here's the results summary for {}, with random seed {}:".format(y_var, i))
-        print(Y_Statistics[y_var][i])
+        # Use model to make predictions
+        make_prediction(sets = [X_train, X_test, y_train, y_test],
+                        i = i,
+                        y_var = y_var,
+                        dictionaries = [Y_Statistics, Predicted_vs_Actual],
+                        lists = [out_of_sample_R2_list, out_of_sample_mse_y_list, out_of_sample_mae_y_list, out_of_sample_mape_y_list],
+                        image_type = image_type,
+                        method = "enr",
+                        model_result = enet_result)
         
         print("\n\n---------------------------------------------\n\n")    
     
     print("Calculating averages...")
     
-    # Print out-of-sample r^2 list
-    print("Out of sample R2 values:")
-    print(out_of_sample_R2_list)
+    # Create list of statistics to be calculated
+    statistics_parameters = [(True, "R2", out_of_sample_R2_list),
+                             (True, "MSE", out_of_sample_mse_y_list),
+                             (True, "MAE", out_of_sample_mae_y_list),
+                             (True, "MAPE", out_of_sample_mape_y_list),
+                             (False, "R2", in_sample_R2_list),
+                             ("", "Alpha", alpha_list),
+                             ("", "L1", l1_list)]
     
-    # Calculate minimum, maximum, and average out-of-sample r^2 values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_Out_R2"] = min(out_of_sample_R2_list)
-    Y_Summary_Statistics[y_var]["Mean_Out_R2"] = mean(out_of_sample_R2_list)
-    Y_Summary_Statistics[y_var]["Max_Out_R2"] = max(out_of_sample_R2_list)
-
-    # Print out-of-sample MSE list
-    print("Out of sample MSE values:")
-    print(out_of_sample_mse_y_list)
-    
-    # Calculate minimum, maximum, and average out-of-sample MSE values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_Out_MSE"] = min(out_of_sample_mse_y_list)
-    Y_Summary_Statistics[y_var]["Mean_Out_MSE"] = mean(out_of_sample_mse_y_list)
-    Y_Summary_Statistics[y_var]["Max_Out_MSE"] = max(out_of_sample_mse_y_list)
-
-    # Print MAE list
-    print("Out of sample MAE values:")
-    print(out_of_sample_mae_y_list)
-    
-    # Calculate minimum, maximum, and average out-of-sample MAE values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_Out_MAE"] = min(out_of_sample_mae_y_list)
-    Y_Summary_Statistics[y_var]["Mean_Out_MAE"] = mean(out_of_sample_mae_y_list)
-    Y_Summary_Statistics[y_var]["Max_Out_MAE"] = max(out_of_sample_mae_y_list)
-    
-    # Print MAPE list
-    print("Out of sample MAPE values:")
-    print(out_of_sample_mape_y_list)
-    
-    # Calculate minimum, maximum, and average out-of-sample MAPE values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_Out_MAPE"] = min(out_of_sample_mape_y_list)
-    Y_Summary_Statistics[y_var]["Mean_Out_MAPE"] = mean(out_of_sample_mape_y_list)
-    Y_Summary_Statistics[y_var]["Max_Out_MAPE"] = max(out_of_sample_mape_y_list)
-    
-    # Print in-sample r^2 list
-    print("In sample R2 values:")
-    print(in_sample_R2_list)
-    
-    # Calculate minimum, maximum, and average in-sample r^2 values and
-    # add to dictionary
-    Y_Summary_Statistics[y_var]["Min_In_R2"] = min(in_sample_R2_list)
-    Y_Summary_Statistics[y_var]["Mean_In_R2"] = mean(in_sample_R2_list)
-    Y_Summary_Statistics[y_var]["Max_In_R2"] = max(in_sample_R2_list)
-    
-    # Print alpha list
-    print("Alpha values:")
-    print(alpha_list)
-    
-    # Calculate minimum, maximum, and average alpha values and add to dictionary
-    Y_Summary_Statistics[y_var]["Min_alpha"] = min(alpha_list)
-    Y_Summary_Statistics[y_var]["Mean_alpha"] = mean(alpha_list)
-    Y_Summary_Statistics[y_var]["Max_alpha"] = max(alpha_list)
-    
-    # Print l1 list
-    print("L1 values:")
-    print(l1_list)
-    
-    # Calculate minimum, maximum, and average alpha values and add to dictionary
-    Y_Summary_Statistics[y_var]["Min_l1"] = min(l1_list)
-    Y_Summary_Statistics[y_var]["Mean_l1"] = mean(l1_list)
-    Y_Summary_Statistics[y_var]["Max_l1"] = max(l1_list)
-    
+    # Iterate through the list and calculate statistics for each
+    for sp in statistics_parameters:
+        calculate_statistics(out_sample = sp[0],
+                             statistic_type = sp[1],
+                             statistic_list = sp[2],
+                             statistic_dictionary = Y_Summary_Statistics[y_var])
     
     # Print statistics for all seeds
     print("Here's the results for {}:".format(y_var))
@@ -552,15 +385,199 @@ def enr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics
     print("\n\n#######################\n\n")
 
 
-def output_excel(image_type, y_var, Y_Statistics, y_summary_statistic_dictionary_list, Y_Summary_Statistics, Coefficients, method):
-    '''This function converts summarized statistics to Excel files
+def make_prediction(sets, i, y_var, dictionaries, lists, image_type, method, model_result):
+    '''This function makes predictions using the model and compares it to the
+    actual values.'''
+    
+    # Unpack sample sets
+    X_train, X_test, y_train, y_test = sets[0], sets[1], sets[2], sets[3]
+    
+    # Unpack dictionaries
+    Y_Statistics, Predicted_vs_Actual = dictionaries[0], dictionaries[1]
+    
+    # Unpack lists
+    out_of_sample_R2_list, out_of_sample_mse_y_list, out_of_sample_mae_y_list, out_of_sample_mape_y_list = lists[0], lists[1], lists[2], lists[3]
+
+    # Create dataframe of contextual features and their coefficients as
+    # determined by the model building
+    # Sort by absolute value of coefficients
+    # importance_column = "Importance_{}".format(str(i))
+    # y_df = pd.DataFrame({'Feature': list(X_train.columns),
+    #                      importance_column: model_result.feature_importances_}).sort_values(importance_column, ascending = False)
+    
+    # Print top 10 model features and coefficients
+    # print("Top 10 Model Features and Coefficients")
+    # print(y_df.head(10))
+    # print("The dimension of this table is {}.".format(y_df.shape))
+    
+    # Predict y based on X test values
+    y_pred = model_result.predict(X_test)
+
+    # Predict y based on X train values
+    y_pred_train = model_result.predict(X_train)
+    
+    # Create list of predicted y values
+    y_actual_values = list(y_train) + list(y_test)
+    
+    # Create list of predicted y values
+    y_predicted_values = list(y_pred_train) + list(y_pred)
+    
+    Predicted_vs_Actual[y_var][i] = {"Predicted_Y": y_predicted_values, "Actual_Y": y_actual_values}
+
+    # Create list indicating whether y value is part of train or test set
+    y_set = (len(list(y_train)) * ["train"]) + (len(list(y_test)) * ["test"])
+
+    # Create dataframe with the y train and y test values
+    predicted_actual_df = pd.concat([y_train.to_frame("actual"), y_test.to_frame("actual")], axis=0)
+    
+    # Add corresponding predicted y values as a new column to dataframe
+    predicted_actual_df["predicted"] = y_predicted_values
+
+    # Add corresponding label as a new column to dataframe
+    predicted_actual_df["set"] = y_set
+    
+    # Drop index (FIPS)
+    predicted_actual_df.reset_index(drop = False, inplace = True)
+    
+    # Set FIPS value ranges for each area (minimum, maximum)
+    sl_fips = (1103005, 9233130)
+    blz_fips = (10100101, 61210202)
+    gh_fips = (304301009, 306200288)
+    
+    # Iterate through each row in dataframe and assign FIPS to area
+    for index, row in predicted_actual_df.iterrows():
+        
+        # Get FIPS value
+        fips_value = row["FIPS"]
+
+        # Create column name to hold area
+        area_col = "area"
+        
+        # Sri Lanka
+        if sl_fips[0] <= fips_value and sl_fips[1] >= fips_value:
+            row[area_col] = "Sri Lanka"
+        
+        # Belize
+        elif blz_fips[0] <= fips_value and blz_fips[1] >= fips_value:
+            row[area_col] = "Belize"
+        
+        # Ghana
+        elif gh_fips[0] <= fips_value and gh_fips[1] >= fips_value:
+            row[area_col] = "Ghana"
+        
+        # Otherwise, area has not been specified
+        else:
+            row[area_col] = "Other"
+        
+        # Update dataframe with new values
+        predicted_actual_df.loc[index, area_col] = row[area_col]
+    
+    # Get information about dataframe
+    # print(predicted_actual_df.head())
+    # print(predicted_actual_df.shape)
+
+    # Reset the index to FIPS
+    predicted_actual_df = predicted_actual_df.set_index("FIPS")
+    
+    # Export dataframe to CSV
+    predicted_actual_df.to_csv("{}_{}_{}_{}_pred-act.csv".format(image_type, method, y_var, str(i)))
+    
+    # Group dataframe by area
+    groups = predicted_actual_df.groupby(area_col)
+
+    # Create plot
+    fig, ax = plt.subplots(figsize = (15, 10))
+
+    # Add 5% padding to autoscaling
+    ax.margins(0.05)
+
+    # Iterate through each group and plot points
+    for name, group in groups:
+        ax.plot(group.actual, group.predicted, marker='o', linestyle='', ms=3, label=name)
+    
+    # Create a legend
+    ax.legend()
+
+    # Create and save the figure
+    plt.savefig("{}_{}_{}_{}_pred-act-fig.png".format(image_type, method, y_var, str(i)), dpi = 300, format = "png")
+    plt.show()
+    
+    # Calculate out-of-sample r^2
+    # This only uses the test sizes
+    out_of_sample_r_squared = model_result.score(X_test, y_test)
+    
+    # Calculate ouf-of-sample MSE 
+    out_of_sample_mse_y = mse(y_test, y_pred)
+
+    # Calculate ouf-of-sample MAE    
+    out_of_sample_mae_y = mae(y_test, y_pred)
+    
+    # Calculate ouf-of-sample MAPE
+    out_of_sample_mape_y = np.mean(abs((y_test - y_pred) / y_test)) * 100
+   
+    # Print statement of statistics
+    print("Out of Sample R2: {:.2f}; Out of Sample MSE: {:.3f}; Out of Sample MAE: {:.3f}; MAPE {:.3f}"
+          .format(out_of_sample_r_squared, out_of_sample_mse_y, out_of_sample_mae_y, out_of_sample_mape_y))
+    
+    # Add out-of-sample r^2, MSE, MAE, and MAPE to dictionary
+    Y_Statistics[y_var][i]['Out_of_Sample R2'] = out_of_sample_r_squared
+    Y_Statistics[y_var][i]['Out_of_Sample MSE'] = out_of_sample_mse_y
+    Y_Statistics[y_var][i]['Out_of_Sample MAE'] = out_of_sample_mae_y
+    Y_Statistics[y_var][i]['Out_of_Sample MAPE'] = out_of_sample_mape_y
+    
+    # Append out-of-sample r^2, MSE, MAE, and MAPE to lists
+    out_of_sample_R2_list.append(out_of_sample_r_squared)
+    out_of_sample_mse_y_list.append(out_of_sample_mse_y)
+    out_of_sample_mae_y_list.append(out_of_sample_mae_y)
+    out_of_sample_mape_y_list.append(out_of_sample_mape_y)
+    
+    # Print statistics for that seed iteration
+    print("Here's the results summary for {}, with random seed {}:".format(y_var, i))
+    print(Y_Statistics[y_var][i])
+
+
+def calculate_statistics(out_sample, statistic_type, statistic_list, statistic_dictionary):
+    '''This function calculates the minimum, maximu, and average (mean) of
+    each list of values.'''
+
+    # Check if sample is out-of-sample (True) or in-sample (False) by
+    # checking if variable is of boolean type
+    if isinstance(out_sample, bool):
+
+        # Assign label name along with sample type
+        values_label = "{}_{}".format("Out of sample" if out_sample else "In sample", statistic_type)
+        
+        # Assign ditionary key name along with sample type
+        dictionary_key = "{}_{}".format("Out" if out_sample else "In", statistic_type)
+    
+    # If not specified, then sample type not applicable
+    else:
+
+        # Assign label name along with sample type
+        values_label = statistic_type
+        
+        # Assign ditionary key name along with sample type
+        dictionary_key = statistic_type
+    
+    # Print list of values for which the statistics will be calculated
+    print("{} values: {}".format(values_label.replace("_", " "), statistic_list))
+    
+    # Calculate minimum, maximum, and average out-of-sample values and
+    # add to dictionary
+    statistic_dictionary["Min_{}".format(dictionary_key)] = min(statistic_list)
+    statistic_dictionary["Mean_{}".format(dictionary_key)] = mean(statistic_list)
+    statistic_dictionary["Max_{}".format(dictionary_key)] = max(statistic_list)
+
+
+def output_csv(method, image_type, y_var, y_summary_statistic_dictionary_list, Y_Statistics, Y_Summary_Statistics, Coefficients):
+    '''This function converts summarized statistics to CSV files
     for easier viewing.'''
 
     print("\n\n=============================================\n\n")
-    print("CONVERT TO EXCEL")
+    print("CONVERT TO CSV")
     
     # Iterate through each y variable's statistics (R^2, MSE, etc) to
-    # create one Excel file
+    # create one CSV file
     print("Working on each seed for each variable's statistics...")
     for key in Y_Statistics:
         
@@ -589,16 +606,13 @@ def output_excel(image_type, y_var, Y_Statistics, y_summary_statistic_dictionary
         seed_df = pd.concat(seed_output_list)
     
         # Print dataframe
-        print("Here's the merged dataframe that will be converted to an Excel spreadsheet:")
+        print("Here's the merged dataframe that will be converted to an CSV spreadsheet:")
         print(seed_df)
         
-        # Convert to Excel spreadsheet
+        # Convert to CSV spreadsheet
         # Optional
-        print("Converting to Excel...")
-        seed_df.to_excel(excel_writer = image_type + "_" + method + "_" + key + "_seed_output.xlsx",
-                         header = True,
-                         index = True,
-                         index_label = "seed")
+        print("Converting to CSV...")
+        seed_df.to_csv("{}_{}_{}_seed_output.csv".format(image_type, method, key))
         
     
     # Iterate through each y variable
@@ -624,15 +638,10 @@ def output_excel(image_type, y_var, Y_Statistics, y_summary_statistic_dictionary
             # Apend each seed's coefficients to list
             seed_coefficient_df_list.append(seed_coefficient_df)
 
-            # Convert to Excel spreadsheet (optional)
-            '''
-            print("Converting to Excel...")
-            seed_coefficient_df.to_excel(excel_writer = image_type + "_" + method + "_" + key + "_" + str(seed_key) + "_importance.xlsx",
-                                         header = True,
-                                         index = True,
-                                         index_label = "Feature_Index")
-            '''
-
+            # Convert to CSV spreadsheet (optional)
+            # print("Converting to CSV...")
+            # seed_coefficient_df.to_csv("{}_{}_{}_{}_importance.csv".format(image_type, method, key, str(seed_key)))
+            
         # Concatenate all seed dataframes
         print("Concatenating dataframes...")
         merged_coefficient_df = pd.concat(seed_coefficient_df_list, axis = 1, sort = True)
@@ -647,12 +656,9 @@ def output_excel(image_type, y_var, Y_Statistics, y_summary_statistic_dictionary
         # Sort by mean
         merged_coefficient_df = merged_coefficient_df.sort_values("mean", ascending = False)
         
-        # Save to Excel
-        print("Converting to Excel...")
-        merged_coefficient_df.to_excel(excel_writer = image_type + "_" + method + "_" + key + "_summary_importance.xlsx",
-                                       header = True,
-                                       index = True,
-                                       index_label = "Feature_Index")
+        # Save to CSV
+        print("Converting to CSV...")
+        merged_coefficient_df.to_csv("{}_{}_{}_summary_importance.csv".format(image_type, method, key))
         
     # Call the dictionary within each key, converts it to a dataframe, and
     # appends it to a list
@@ -675,22 +681,19 @@ def output_excel(image_type, y_var, Y_Statistics, y_summary_statistic_dictionary
     y_summary_statistic_df = pd.concat(y_summary_statistic_dictionary_list)
     
     # Print dataframe
-    print("Here's the merged dataframe that will be converted to an Excel spreadsheet:")
+    print("Here's the merged dataframe that will be converted to an CSV spreadsheet:")
     print(y_summary_statistic_df)
     
-    # Convert to Excel spreadsheet
-    print("Converting to Excel...")
-    y_summary_statistic_df.to_excel(excel_writer = image_type + "_" + method + "_y_summary_stats.xlsx",
-                                    header = True,
-                                    index = True,
-                                    index_label = "y_variable")
+    # Convert to CSV spreadsheet
+    print("Converting to CSV...")
+    y_summary_statistic_df.to_csv("{}_{}_y_summary_stats.csv".format(image_type, method))
     
     # Return variables
     return seed_df, y_summary_statistic_df
     
     
 # This is the main function that calls the other functions
-def main(image_type, dep_var, method = "rfr"):
+def main(image_type, dep_var_type, method = "rfr"):
     '''This is the main function that runs the script and calls the other
     functions.'''
     
@@ -699,6 +702,7 @@ def main(image_type, dep_var, method = "rfr"):
     Y_Summary_Statistics = {}
     Models = {}
     Coefficients = {}
+    Predicted_vs_Actual = {}
     
     # Create empty list
     y_summary_statistic_dictionary_list = []
@@ -709,12 +713,13 @@ def main(image_type, dep_var, method = "rfr"):
     seed_range = range(1, 101)
     
     # Select dependent variables based on user specification
-    if dep_var.lower() == "pop":
+    # These variables will be used for retrieving the files
+    if dep_var_type.lower() == "pop":
         
         # Choose population variable names
-        dep_var_list = ["pop_density_m"]
+        dep_var_list = ["pop_density_km"]
         
-    elif dep_var.upper() == "OSM":
+    elif dep_var_type.upper() == "OSM":
         
         # Choose OSM variable names
         dep_var_list = ["BUILD_DEN", "BUILTUP_AREA", "BUILTUP_DEN_PRCNT", "COUNT_BUILD", "RD_AREA", "RD_DEN", "RD_LENGTH", "SUM_BUILD_AREA"]
@@ -730,54 +735,60 @@ def main(image_type, dep_var, method = "rfr"):
         # Import CSV file
         x_vars, y_var, scaled_df = import_correlation(y, image_type)
         
+        # Raise error if  variable name and column name of the dependent
+        # variable from the CSV file do not match
+        if y != y_var:
+            raise Exception("Dependent variables do not match!")
+            
+        # Otherwise, pass
+        else:
+            pass
+        
         # Select method based on user specification
         if method == "rfr":
 
             # Run RF regression
-            rfr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics, Models, Coefficients, y, image_type, dep_var)
-        
+            rfr(seed_range, image_type, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics, Models, Coefficients, Predicted_vs_Actual)
+            
         elif method == "enr":
 
             # Run ENR regression
-            enr(seed_range, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics, Models, Coefficients, y, image_type, dep_var)
+            enr(seed_range, image_type, x_vars, y_var, scaled_df, Y_Statistics, Y_Summary_Statistics, Models, Coefficients, Predicted_vs_Actual)
         
         else:
             
             # Raise error if method not specified
             raise Exception("Select either ENR or RFR as a method!")
 
-    # Export to Excel spreadsheets
-    seed_df, y_summary_statistic_df = output_excel(image_type, y_var, Y_Statistics, y_summary_statistic_dictionary_list, Y_Summary_Statistics, Coefficients, method)
+    # Export to CSV spreadsheets
+    seed_df, y_summary_statistic_df = output_csv(method, image_type, y_var, y_summary_statistic_dictionary_list, Y_Statistics, Y_Summary_Statistics, Coefficients)
     
     print("\n\n=============================================\n\n")
-    
-    # Return variables
-    # return y_dict, Y_Statistics, Y_Summary_Statistics, Models, Coefficients, seed_df, y_summary_statistic_df
 
 
 # Run script
-# Image type is the country, dependent variable is either "pop" or "OSM",
+# Image type is the country, dependent variable is either "pop" or "OSM,"
 # and method is either "enr" or "rfr"
 
-main(image_type = """sl""", dep_var = "OSM", method = "enr")
-main(image_type = """blz""", dep_var = "OSM", method = "enr")
-main(image_type = """gh""", dep_var = "OSM", method = "enr")
-main(image_type = """sl-blz-gh""", dep_var = "OSM", method = "enr")
+main(image_type = """sl""", dep_var_type = "OSM", method = "enr")
+main(image_type = """blz""", dep_var_type = "OSM", method = "enr")
+main(image_type = """gh""", dep_var_type = "OSM", method = "enr")
+main(image_type = """sl-blz-gh""", dep_var_type = "OSM", method = "enr")
 
-main(image_type = """sl""", dep_var = "OSM", method = "rfr")
-main(image_type = """blz""", dep_var = "OSM", method = "rfr")
-main(image_type = """gh""", dep_var = "OSM", method = "rfr")
-main(image_type = """sl-blz-gh""", dep_var = "OSM", method = "rfr")
+main(image_type = """sl""", dep_var_type = "OSM", method = "rfr")
+main(image_type = """blz""", dep_var_type = "OSM", method = "rfr")
+main(image_type = """gh""", dep_var_type = "OSM", method = "rfr")
+main(image_type = """sl-blz-gh""", dep_var_type = "OSM", method = "rfr")
 
-main(image_type = """sl""", dep_var = "pop", method = "enr")
-main(image_type = """blz""", dep_var = "pop", method = "enr")
-main(image_type = """gh""", dep_var = "pop", method = "enr")
-main(image_type = """sl-blz-gh""", dep_var = "pop", method = "enr")
+main(image_type = """sl""", dep_var_type = "pop", method = "enr")
+main(image_type = """blz""", dep_var_type = "pop", method = "enr")
+main(image_type = """gh""", dep_var_type = "pop", method = "enr")
+main(image_type = """sl-blz-gh""", dep_var_type = "pop", method = "enr")
 
-main(image_type = """sl""", dep_var = "pop", method = "rfr")
-main(image_type = """blz""", dep_var = "pop", method = "rfr")
-main(image_type = """gh""", dep_var = "pop", method = "rfr")
-main(image_type = """sl-blz-gh""", dep_var = "pop", method = "rfr")
+main(image_type = """sl""", dep_var_type = "pop", method = "rfr")
+main(image_type = """blz""", dep_var_type = "pop", method = "rfr")
+main(image_type = """gh""", dep_var_type = "pop", method = "rfr")
+main(image_type = """sl-blz-gh""", dep_var_type = "pop", method = "rfr")
 
 
 print("Done.")
