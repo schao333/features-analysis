@@ -90,7 +90,7 @@ def import_csv(y_variable_index, contextual_features, osm, index_number, index_n
     return all_x, y_var, spfeas_osm
 
 
-def correlation(image_type, all_x, y_var, spfeas_osm, y_dict):
+def correlation(image_type, all_x, y_var, spfeas_osm, y_dict, scale_y):
     '''This function computes the correlations and only takes the top 200
     independent variables.'''
     
@@ -167,8 +167,12 @@ def correlation(image_type, all_x, y_var, spfeas_osm, y_dict):
     # list x_vars
     x_vars = y_dict[y_var]
     
-    # Add 200 standardized variables to new dataframe
-    vars_df = spfeas_osm[x_vars]
+    # Add dependent variable and 200 standardized independent variables
+    # to new dataframe
+    vars_df = spfeas_osm[[y_var] + x_vars]
+    
+    # Rename dependent variable column to indicate it will be scaled
+    vars_df = vars_df.rename(columns = {y_var: "{}_scaled".format(y_var)})
         
     # Scale / normalize data
     print("Standardizing data...")
@@ -179,10 +183,37 @@ def correlation(image_type, all_x, y_var, spfeas_osm, y_dict):
     # print(scaled_df.head())    
     print("The dimension of the scaled table is {}.".format(scaled_df.shape))
     
-    # Concatenate unstandardized dependent variable with standardized
+    # Concatenate unscaled dependent variable with scaled
     # independent variables
     full_df = pd.concat([spfeas_osm[y_var], scaled_df], axis=1)
-
+    
+    # Rename newly-added dependent variable column to indicate it is
+    # not scaled
+    full_df = full_df.rename(columns = {y_var: "{}_unscaled".format(y_var)})
+        
+    # Finalize full dataframe of independent and dependent variables
+    if scale_y.strip().lower() == "yes":
+        # If dependent variable is scaled, create a new dataframe consisting
+        # of scaled and unscaled dependent variable
+        y_values = full_df[["{}_unscaled".format(y_var), "{}_scaled".format(y_var)]]
+        
+        # Export to csv
+        y_values.to_csv("{}_{}_y-values.csv".format(image_type, y_var))
+        
+        # Drop the unscaled column
+        full_df = full_df.drop("{}_unscaled".format(y_var), axis = 1)
+        
+        # Change the scaled column name back
+        full_df = full_df.rename(columns = {"{}_scaled".format(y_var): y_var})
+    
+    # Otherwise, if dependent variable is unscaled
+    else:
+        # Drop the scaled column
+        full_df = full_df.drop("{}_scaled".format(y_var), axis = 1)
+        
+        # Change the unscaled column name back
+        full_df = full_df.rename(columns = {"{}_unscaled".format(y_var): y_var})
+        
     # Remove the index (FIPS code)
     # full_df.reset_index(drop = True, inplace = True)
     
@@ -194,7 +225,7 @@ def correlation(image_type, all_x, y_var, spfeas_osm, y_dict):
     return spfeas_osm, x_vars, y_var, full_df
 
 
-def main(image_type, contextual_features, osm, index_number, index_name):
+def main(image_type, contextual_features, osm, index_number, index_name, scale_y):
     '''This is the main function that runs the script and calls the other
     functions.'''
     
@@ -209,7 +240,7 @@ def main(image_type, contextual_features, osm, index_number, index_name):
         all_x, y_var, spfeas_osm = import_csv(y_variable_index, contextual_features, osm, index_number, index_name)
         
         # Run correlation
-        spfeas_osm, x_vars, y_var, scaled_df = correlation(image_type, all_x, y_var, spfeas_osm, y_dict)
+        spfeas_osm, x_vars, y_var, scaled_df = correlation(image_type, all_x, y_var, spfeas_osm, y_dict, scale_y)
 
     print("\n\n=============================================\n\n")
     
@@ -218,12 +249,13 @@ def main(image_type, contextual_features, osm, index_number, index_name):
 
 
 # Run script
-# Index number is the number of contextual features; index name is the
-# primary key column name (432 if using all spfeas in the study) *
-main(image_type = """sl""", contextual_features = """sl_spfeas.csv""", osm = """sl_OSM.csv""", index_number = 432, index_name = """FIPS""")
-main(image_type = """blz""", contextual_features = """blz_spfeas.csv""", osm = """blz_OSM.csv""", index_number = 432, index_name = """FIPS""")
-main(image_type = """gh""", contextual_features = """gh_spfeas.csv""", osm = """gh_OSM.csv""", index_number = 432, index_name = """FIPS""")
-main(image_type = """sl-blz-gh""", contextual_features = """sl-blz-gh_spfeas.csv""", osm = """sl-blz-gh_OSM.csv""", index_number = 432, index_name = """FIPS""")
+# Index number is the number of contextual features, index name is the
+# primary key column name (432 if using all spfeas in the study), and scale y
+# allows for scaling of dependent variable *
+main(image_type = """sl""", contextual_features = """sl_spfeas.csv""", osm = """sl_OSM.csv""", index_number = 432, index_name = """FIPS""", scale_y = """no""")
+main(image_type = """blz""", contextual_features = """blz_spfeas.csv""", osm = """blz_OSM.csv""", index_number = 432, index_name = """FIPS""", scale_y = """no""")
+main(image_type = """gh""", contextual_features = """gh_spfeas.csv""", osm = """gh_OSM.csv""", index_number = 432, index_name = """FIPS""", scale_y = """no""")
+main(image_type = """sl-blz-gh""", contextual_features = """sl-blz-gh_spfeas.csv""", osm = """sl-blz-gh_OSM.csv""", index_number = 432, index_name = """FIPS""", scale_y = """no""")
 
 
 print("Done.")

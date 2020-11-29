@@ -185,7 +185,7 @@ def get_variables(y_variable_index, index_number, joined_df):
 
 
 # This function calculates correlations
-def correlation(ctry, all_x, y_var, joined_df, y_dict):
+def correlation(ctry, all_x, y_var, joined_df, y_dict, scale_y):
     '''This function computes the correlations and only takes the top 200
     independent variables.'''
     
@@ -263,9 +263,13 @@ def correlation(ctry, all_x, y_var, joined_df, y_dict):
     # list x_vars
     x_vars = y_dict[y_var_ydict_key]
     
-    # Add 200 standardized variables to new dataframe
-    vars_df = joined_df[x_vars]
-        
+    # Add dependent variable and 200 standardized independent variables
+    # to new dataframe
+    vars_df = joined_df[[y_var] + x_vars]
+    
+    # Rename dependent variable column to indicate it will be scaled
+    vars_df = vars_df.rename(columns = {y_var: "{}_scaled".format(y_var)})
+    
     # Scale / normalize data
     print("Standardizing data...")
     standard_scaler = preprocessing.StandardScaler()
@@ -275,9 +279,36 @@ def correlation(ctry, all_x, y_var, joined_df, y_dict):
     # print(scaled_df.head())    
     print("The dimension of the scaled table is {}.".format(scaled_df.shape))
     
-    # Concatenate unstandardized dependent variable with standardized
+    # Concatenate unscaled dependent variable with scaled
     # independent variables
     full_df = pd.concat([joined_df[y_var], scaled_df], axis=1)
+    
+    # Rename newly-added dependent variable column to indicate it is
+    # not scaled
+    full_df = full_df.rename(columns = {y_var: "{}_unscaled".format(y_var)})
+        
+    # Finalize full dataframe of independent and dependent variable
+    if scale_y.strip().lower() == "yes":
+        # If dependent variable is scaled, create a new dataframe consisting
+        # of scaled and unscaled dependent variable
+        y_values = full_df[["{}_unscaled".format(y_var), "{}_scaled".format(y_var)]]
+        
+        # Export to csv
+        y_values.to_csv("{}_{}_y-values.csv".format(ctry, y_var))
+        
+        # Drop the unscaled column
+        full_df = full_df.drop("{}_unscaled".format(y_var), axis = 1)
+        
+        # Change the scaled column name back
+        full_df = full_df.rename(columns = {"{}_scaled".format(y_var): y_var})
+    
+    # Otherwise, if dependent variable is unscaled
+    else:
+        # Drop the scaled column
+        full_df = full_df.drop("{}_scaled".format(y_var), axis = 1)
+        
+        # Change the unscaled column name back
+        full_df = full_df.rename(columns = {"{}_unscaled".format(y_var): y_var})
 
     # Remove the index (FIPS code)
     # full_df.reset_index(drop = True, inplace = True)
@@ -290,7 +321,7 @@ def correlation(ctry, all_x, y_var, joined_df, y_dict):
     return joined_df, x_vars, y_var, y_dict, full_df
 
 
-def main(countries, base_folder, index_name):
+def main(countries, base_folder, index_name, scale_y):
     '''This is the main function that runs the script and calls the other
     functions.'''
     
@@ -318,7 +349,7 @@ def main(countries, base_folder, index_name):
                                                     joined_df = cf_shp_pop_df)
             
             # Run correlation
-            joined_df, x_vars, y_var, y_dict, scaled_df = correlation(ctry, all_x, y_var, joined_df, y_dict)
+            joined_df, x_vars, y_var, y_dict, scaled_df = correlation(ctry, all_x, y_var, joined_df, y_dict, scale_y)
         
         
         # Only use this function if you are concatenating spfeas and
@@ -336,7 +367,7 @@ def main(countries, base_folder, index_name):
                                                 joined_df = country_list)
 
         # Run correlation
-        joined_df, x_vars, y_var, y_dict, scaled_df = correlation(ctry, all_x, y_var, joined_df, y_dict)
+        joined_df, x_vars, y_var, y_dict, scaled_df = correlation(ctry, all_x, y_var, joined_df, y_dict, scale_y)
         
         
     print("\n\n=============================================\n\n")
@@ -346,8 +377,9 @@ def main(countries, base_folder, index_name):
 
 # Run script
 # Countries are the countries abbreviations for analysis, base folder is where
-# the CSVs are saved, and inex name is the primary key column name *
-main(countries = ["""sl""", """blz""", """gh"""], base_folder = r"""folder/""", index_name = """FIPS""")
+# the CSVs are saved, index name is the primary key column name, and scale y
+# allows for scaling of dependent variable *
+main(countries = ["""sl""", """blz""", """gh"""], base_folder = r"""folder/""", index_name = """FIPS""", scale_y = """no""")
 
 
 print("Done.")
