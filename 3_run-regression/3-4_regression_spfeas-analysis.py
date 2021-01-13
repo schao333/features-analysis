@@ -501,6 +501,7 @@ def make_prediction(sets, i, y_var, dictionaries, lists, image_type, method, mod
     # Create and save the figure
     plt.savefig("{}_{}_{}_{}_pred-act-fig.png".format(image_type, method, y_var, str(i)), dpi = 300, format = "png")
     plt.show()
+    plt.close()
     
     # Calculate out-of-sample r^2
     # This only uses the test sizes
