@@ -66,7 +66,7 @@ These scripts are used to process the results created from model building. The r
 
 ## Contribute
 
-If you have any questions or suggestions, please [contact me](www.stevenchao.me/contact.php).
+If you have any questions or suggestions, please [contact me](https://www.stevenchao.me/contact.php).
 
 ## License
 
@@ -74,7 +74,7 @@ To be determined.
 
 ## Author
 
-* [**Steven Chao**](www.stevenchao.me), M.Sc. '20, The George Washington University
+* [**Steven Chao**](https://www.stevenchao.me), M.Sc. '20, The George Washington University
 
 ## Acknowledgments
 
