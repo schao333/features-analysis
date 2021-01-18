@@ -613,6 +613,7 @@ def output_csv(method, image_type, y_var, y_summary_statistic_dictionary_list, Y
         # Convert to CSV spreadsheet
         # Optional
         print("Converting to CSV...")
+        seed_df.index.name = "seed"
         seed_df.to_csv("{}_{}_{}_seed_output.csv".format(image_type, method, key))
         
     
@@ -641,6 +642,7 @@ def output_csv(method, image_type, y_var, y_summary_statistic_dictionary_list, Y
 
             # Convert to CSV spreadsheet (optional)
             # print("Converting to CSV...")
+            # seed_coefficient_df.index.name = "Feature_Index"
             # seed_coefficient_df.to_csv("{}_{}_{}_{}_importance.csv".format(image_type, method, key, str(seed_key)))
             
         # Concatenate all seed dataframes
@@ -659,6 +661,7 @@ def output_csv(method, image_type, y_var, y_summary_statistic_dictionary_list, Y
         
         # Save to CSV
         print("Converting to CSV...")
+        merged_coefficient_df.index.name = "Feature_Index"
         merged_coefficient_df.to_csv("{}_{}_{}_summary_importance.csv".format(image_type, method, key))
         
     # Call the dictionary within each key, converts it to a dataframe, and
@@ -687,6 +690,7 @@ def output_csv(method, image_type, y_var, y_summary_statistic_dictionary_list, Y
     
     # Convert to CSV spreadsheet
     print("Converting to CSV...")
+    y_summary_statistic_df.index.name = "y_variable"
     y_summary_statistic_df.to_csv("{}_{}_y_summary_stats.csv".format(image_type, method))
     
     # Return variables
