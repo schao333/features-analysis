@@ -244,14 +244,15 @@ def one_sheet_excel(result, input_df, sheet_b, start_row, start_column, sheet_a 
     # Write the header dataframe to the sheet
     df_header.to_excel(writer, sheet_name = result, startrow = start_row, startcol = start_column)
     
-    # Increment start row counter by the number of rows in the header
+    # Increment start column counter by the number of columns in the header
     # dataframe to prevent overwrite
-    start_row += df_header.shape[0] + 3
+    start_column += df_header.shape[1] + 2
 
-    # Create empty list to hold max widths of dataframes, which will be used
-    # to calculate how much to offset each subsequent dataframe (as they will
-    # be placed side by side on one sheet)
-    max_width = []
+    # Create empty list to hold max heights of dataframes, which will be used
+    # to calculate how much to offset each subsequent dataframe (as all
+    # dataframes for a specific urban attribute for OSM or for a specific
+    # country for population density will be placed side by side on one sheet)
+    max_height = []
     
     # Iterate through the first key of the inputted dictionary (note: inputted
     # dataframe might be a subset of the original dictionary)
@@ -264,30 +265,39 @@ def one_sheet_excel(result, input_df, sheet_b, start_row, start_column, sheet_a 
         # Write the header dataframe to the sheet
         df_subheader.to_excel(writer, sheet_name = result, startrow = start_row, startcol = start_column)
         
-        # Increment start row counter by the number of rows in the header
-        # dataframe to prevent overwrite
-        start_row += df_subheader.shape[0] + 2
+        # Increment start row counter by 1 so the headers line up
+        start_row += 1
+
+        # Increment start column counter by the number of columns in the
+        # header dataframe to prevent overwrite
+        start_column += df_subheader.shape[1] + 1
         
         # Write the dataframe to the sheet
         frame_c.to_excel(writer, sheet_name = result, startrow = start_row, startcol = start_column)
         
-        # Increment start row counter by the number of rows in the dataframe
-        # to prevent overwrite
-        start_row += frame_c.shape[0] + 3
+        # Increment start column counter by the number of columns in the
+        # dataframe to prevent overwrite
+        start_column += frame_c.shape[1] + 2
         
+        # Add height of dataframe to list of max heights
+        max_height.append(frame_c.shape[0])
         
-        # Add width of dataframe to list of max widths
-        max_width.append(frame_c.shape[1])
+        # Decrease start row counter by 1 to "reset" counter so the headers
+        # line up
+        start_row = start_row - 1
     
-    # Increment start column counter by the number of columns in the dataframe
+    # Increment start row counter by 1 so the headers line up
+    start_row += 1
+    
+    # Increment start row counter by the number of rows in the dataframe
     # to prevent overwrite
-    start_column += max(max_width) + 4
+    start_row += max(max_height) + 2
     
-    # Increment start row counter to use for second start row
-    start_row += 3
+    # Reset start column counter to use for next set of dataframes
+    start_column = 0
     
     # Return start row and column counters for use in writing the next
-    # dataframe (which will be horizontally next to the current dataframe)
+    # dataframe (which will be vertically below the current dataframe)
     return start_row, start_column
 
 
@@ -698,6 +708,10 @@ with pd.ExcelWriter(os.path.join(base_folder_path, "summarized_{}_results.xlsx".
                 # Call function to export dataframes onto one sheet
                 second_start_row, start_column = one_sheet_excel(result = "importance_{}".format(sheet), input_df = importance_dict[sheet], sheet_a = "", sheet_b = sheet2, start_row = start_row, start_column = start_column)
             
+                # Update start row number for second start row (for next set
+                # of dataframes)
+                start_row = second_start_row
+                
             # Otherwise, OSM analysis is specified
             else:
             
@@ -708,6 +722,10 @@ with pd.ExcelWriter(os.path.join(base_folder_path, "summarized_{}_results.xlsx".
                     # Call function to export dataframes onto one sheet
                     second_start_row, start_column = one_sheet_excel(result = "importance_{}".format(sheet), input_df = importance_dict[sheet][sheet2], sheet_a = sheet2, sheet_b = sheet3, start_row = start_row, start_column = start_column)
                 
+                    # Update start row number for second start row (for next
+                    # set of dataframes)
+                    start_row = second_start_row
+
                 # Reset start column
                 start_column = 0
                 
@@ -730,6 +748,10 @@ with pd.ExcelWriter(os.path.join(base_folder_path, "summarized_{}_results.xlsx".
             # Call function to export dataframes onto one sheet
             second_start_row, start_column = one_sheet_excel(result = "pearson", input_df = pearson_dict, sheet_a = "", sheet_b = sheet, start_row = start_row, start_column = start_column)
         
+            # Update start row number for second start row (for next set
+            # of dataframes)
+            start_row = second_start_row
+                
         # Otherwise, OSM analysis is specified
         else:
             
@@ -739,7 +761,11 @@ with pd.ExcelWriter(os.path.join(base_folder_path, "summarized_{}_results.xlsx".
             
                 # Call function to export dataframes onto one sheet
                 second_start_row, start_column = one_sheet_excel(result = "pearson", input_df = pearson_dict[sheet], sheet_a = sheet, sheet_b = sheet2, start_row = start_row, start_column = start_column)
-            
+                
+                # Update start row number for second start row (for next set
+                # of dataframes)
+                start_row = second_start_row
+
             # Reset start column
             start_column = 0
             
